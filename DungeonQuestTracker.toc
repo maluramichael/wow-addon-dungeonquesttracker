@@ -1,0 +1,17 @@
+## Interface: 20505
+## Title: |cFF00D1FFMM|r DungeonQuestTracker
+## Notes: Track dungeon quest completion across all Classic and TBC dungeons
+## Author: Michael Malura
+## Version: 0.1.0
+## IconTexture: Interface\Icons\INV_Misc_Book_11
+## Category-enUS: Quests
+## Category-deDE: Quests
+## SavedVariables: DungeonQuestTrackerDB
+## OptionalDeps: Ace3, LibDataBroker-1.1, LibDBIcon-1.0
+
+embeds.xml
+Bindings.xml
+Data.lua
+Core.lua
+Config.lua
+UI.lua
