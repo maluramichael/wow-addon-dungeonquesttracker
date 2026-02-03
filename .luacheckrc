@@ -59,4 +59,5 @@ read_globals = {
     "GetTime", "GetRealmName", "GetAddOnMetadata",
     "InCombatLockdown", "InterfaceOptionsFrame_OpenToCategory",
     "Settings", "C_Timer",
+    "IsControlKeyDown",
 }

@@ -109,11 +109,7 @@ function DungeonQuestTracker:DrawComplex(container, complex)
     for _, dungeon in ipairs(complex.dungeons) do
         local total, completed, inProgress = self:GetDungeonStats(dungeon)
 
-        if total == 0 then
-            -- No visible quests for this dungeon
-        elseif completed == total and not self.db.profile.showCompletedDungeons then
-            -- Skip completed dungeon
-        else
+        if total > 0 and not (completed == total and not self.db.profile.showCompletedDungeons) then
             self:DrawDungeon(container, dungeon, total, completed, inProgress)
         end
     end
@@ -310,7 +306,7 @@ function DungeonQuestTracker:ShowWowheadLink(questId, questName)
         editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
         editBox:SetScript("OnEnterPressed", function() frame:Hide() end)
         -- Close after Ctrl+C: detect when text gets deselected (copy happened)
-        editBox:SetScript("OnKeyUp", function(self, key)
+        editBox:SetScript("OnKeyUp", function(_, key)
             if key == "C" and IsControlKeyDown() then
                 C_Timer.After(0.2, function() frame:Hide() end)
             end
