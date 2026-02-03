@@ -7,6 +7,9 @@ libs/
 *.swp
 *.swo
 
+# Scraper tools
+tools/
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -29,7 +29,7 @@ function DungeonQuestTracker:GetDefaults()
             showPrerequisites = true,
             showOnlyCurrentFaction = true,
             showHeroicQuests = true,
-            lastTab = "tbc1",
+            lastTab = "summary",
         },
     }
 end
@@ -91,6 +91,18 @@ function DungeonQuestTracker:InvalidateCache()
     questStatusCache = {}
 end
 
+-- TBC Classic compatible: scan quest log for a quest ID
+local function IsQuestInLog(questId)
+    local numEntries = GetNumQuestLogEntries()
+    for i = 1, numEntries do
+        local _, _, _, isHeader, _, _, _, qid = GetQuestLogTitle(i)
+        if not isHeader and qid == questId then
+            return true
+        end
+    end
+    return false
+end
+
 function DungeonQuestTracker:GetQuestStatus(questId)
     if not cacheDirty and questStatusCache[questId] then
         return questStatusCache[questId]
@@ -99,13 +111,8 @@ function DungeonQuestTracker:GetQuestStatus(questId)
     local status
     if C_QuestLog.IsQuestFlaggedCompleted(questId) then
         status = "completed"
-    elseif C_QuestLog.GetLogIndexForQuestID(questId) then
-        local logIndex = C_QuestLog.GetLogIndexForQuestID(questId)
-        if logIndex and logIndex > 0 then
-            status = "in_progress"
-        else
-            status = "not_started"
-        end
+    elseif IsQuestInLog(questId) then
+        status = "in_progress"
     else
         status = "not_started"
     end
