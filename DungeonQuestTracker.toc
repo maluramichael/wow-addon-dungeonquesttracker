@@ -10,7 +10,6 @@
 ## OptionalDeps: Ace3, LibDataBroker-1.1, LibDBIcon-1.0
 
 embeds.xml
-Bindings.xml
 Data.lua
 Core.lua
 Config.lua
