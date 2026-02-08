@@ -256,15 +256,17 @@ function DungeonQuestTracker:DrawDungeon(container, dungeon, total, completed, i
     for _, quest in ipairs(visibleQuests) do
         local hasPrereqs = self.db.profile.showPrerequisites and quest.prerequisites and #quest.prerequisites > 0
         if hasPrereqs then
-            for _, prereq in ipairs(quest.prerequisites) do
-                self:DrawPrereqRow(group, prereq)
+            for i, prereq in ipairs(quest.prerequisites) do
+                self:DrawPrereqRow(group, prereq, i - 1)
             end
+            self:DrawQuestRow(group, quest, #quest.prerequisites)
+        else
+            self:DrawQuestRow(group, quest, 0)
         end
-        self:DrawQuestRow(group, quest, hasPrereqs)
     end
 end
 
-function DungeonQuestTracker:DrawQuestRow(container, quest, indented)
+function DungeonQuestTracker:DrawQuestRow(container, quest, indentLevel)
     local status = self:GetQuestStatus(quest.questId)
     local icon = STATUS_ICONS[status] or STATUS_ICONS.not_started
 
@@ -300,7 +302,7 @@ function DungeonQuestTracker:DrawQuestRow(container, quest, indented)
         levelTag = string.format(" |cff%s(%d)|r", levelColor, quest.level)
     end
 
-    local indent = indented and "        " or "  "
+    local indent = "  " .. string.rep("    ", indentLevel or 0)
     local text = string.format("%s%s  |cff%s%s|r%s%s%s",
         indent, icon, nameColor, quest.name, levelTag, heroicTag, factionTag)
 
@@ -341,14 +343,14 @@ function DungeonQuestTracker:DrawQuestRow(container, quest, indented)
     container:AddChild(row)
 end
 
-function DungeonQuestTracker:DrawPrereqRow(container, prereq)
+function DungeonQuestTracker:DrawPrereqRow(container, prereq, depth)
     local status = self:GetQuestStatus(prereq.questId)
     local icon = STATUS_ICONS[status] or STATUS_ICONS.not_started
 
     local nameColor = status == "completed" and "6a6a6a" or "aa9977"
 
-    -- Prerequisite shown at normal indent level, main quest indented below
-    local text = string.format("  %s  |cff%s%s|r |cff666666[Pre]|r", icon, nameColor, prereq.name)
+    local indent = "  " .. string.rep("    ", depth or 0)
+    local text = string.format("%s%s  |cff%s%s|r |cff666666[Pre]|r", indent, icon, nameColor, prereq.name)
 
     local row = AceGUI:Create("InteractiveLabel")
     row:SetText(text)
