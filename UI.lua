@@ -4,7 +4,9 @@ local DungeonQuestTracker = addon
 local AceGUI = LibStub("AceGUI-3.0")
 
 local mainFrame = nil
-local currentTab = "summary"
+local currentTab = "classic"
+local searchText = ""
+local searchBox = nil
 
 -- Status icons using WoW raid readycheck textures
 local STATUS_ICONS = {
@@ -24,6 +26,7 @@ end
 function DungeonQuestTracker:ShowUI()
     if mainFrame then
         self:InvalidateCache()
+        self:UpdateStatusBar()
         self:RefreshUI()
         mainFrame:Show()
         return
@@ -31,7 +34,7 @@ function DungeonQuestTracker:ShowUI()
 
     mainFrame = AceGUI:Create("Frame")
     mainFrame:SetTitle("Dungeon Quest Tracker")
-    mainFrame:SetStatusText("Track dungeon quest completion")
+    mainFrame:SetStatusText("")
     mainFrame:SetLayout("Fill")
     mainFrame:SetWidth(650)
     mainFrame:SetHeight(550)
@@ -48,7 +51,7 @@ function DungeonQuestTracker:ShowUI()
     local tabGroup = AceGUI:Create("TabGroup")
     tabGroup:SetLayout("Fill")
     tabGroup:SetTabs(tabs)
-    tabGroup:SetCallback("OnGroupSelected", function(container, event, group)
+    tabGroup:SetCallback("OnGroupSelected", function(container, _, group)
         currentTab = group
         self.db.profile.lastTab = group
         self:RefreshTabContent(container, group)
@@ -56,12 +59,33 @@ function DungeonQuestTracker:ShowUI()
 
     mainFrame:AddChild(tabGroup)
 
-    -- Restore last tab or default to summary
-    local lastTab = self.db.profile.lastTab or "summary"
+    -- Restore last tab or default to classic
+    local lastTab = self.db.profile.lastTab or "classic"
+    -- Migrate old "summary" or "dungeons" tab values
+    if lastTab == "summary" or lastTab == "dungeons" then
+        lastTab = "classic"
+    end
     currentTab = lastTab
     tabGroup:SelectTab(lastTab)
 
     self.tabGroup = tabGroup
+    self:UpdateStatusBar()
+end
+
+function DungeonQuestTracker:UpdateStatusBar()
+    if not mainFrame then return end
+    local totalQuests, totalCompleted, totalInProgress = self:GetOverallStats()
+    local pct = totalQuests > 0 and math.floor((totalCompleted / totalQuests) * 100) or 0
+
+    local pctColor = pct == 100 and "|cff00cc00" or (pct >= 50 and "|cffffcc00" or "|cffff6644")
+    local progressStr = pctColor .. totalCompleted .. "/" .. totalQuests .. " (" .. pct .. "%)|r"
+
+    local statusParts = { "Overall: " .. progressStr }
+    if totalInProgress > 0 then
+        table.insert(statusParts, "|cffffff00" .. totalInProgress .. "|r in progress")
+    end
+
+    mainFrame:SetStatusText(table.concat(statusParts, "  |cff666666-|r  "))
 end
 
 function DungeonQuestTracker:RefreshUI()
@@ -73,16 +97,37 @@ end
 function DungeonQuestTracker:RefreshTabContent(container, tab)
     container:ReleaseChildren()
 
+    -- Scroll frame as the single Fill child
     local scroll = AceGUI:Create("ScrollFrame")
     scroll:SetLayout("List")
     scroll:SetFullWidth(true)
     scroll:SetFullHeight(true)
     container:AddChild(scroll)
 
-    if tab == "summary" then
-        self:DrawSummaryTab(scroll)
-        return
-    end
+    -- Search box as first item inside scroll
+    local searchWidget = AceGUI:Create("EditBox")
+    searchWidget:SetLabel("Search")
+    searchWidget:SetText(searchText)
+    searchWidget:SetFullWidth(true)
+    searchWidget:DisableButton(true)
+    searchWidget:SetCallback("OnTextChanged", function(_, _, text)
+        searchText = text or ""
+        if self._searchTimer then
+            self._searchTimer:Cancel()
+        end
+        self._searchTimer = C_Timer.NewTimer(0.2, function()
+            self._searchRefresh = true
+            self:RefreshUI()
+        end)
+    end)
+    searchWidget:SetCallback("OnEnterPressed", function(_, _, text)
+        searchText = text or ""
+        self._searchRefresh = true
+        self:RefreshUI()
+    end)
+    scroll:AddChild(searchWidget)
+
+    searchBox = searchWidget
 
     -- Find the tab definition
     local tabDef = nil
@@ -96,26 +141,83 @@ function DungeonQuestTracker:RefreshTabContent(container, tab)
     if not tabDef then return end
 
     -- Draw dungeons for each complex in this tab
+    local hasResults = false
     for _, complexName in ipairs(tabDef.complexes) do
         for _, complex in ipairs(self.DUNGEON_DATA) do
             if complex.complex == complexName then
-                self:DrawComplex(scroll, complex)
+                local drew = self:DrawComplex(scroll, complex)
+                if drew then hasResults = true end
             end
         end
     end
+
+    -- No results message when searching
+    if not hasResults and searchText ~= "" then
+        local noResults = AceGUI:Create("Label")
+        noResults:SetText("\n  |cff999999No quests or dungeons matching \"|r" .. searchText .. "|cff999999\" found.|r")
+        noResults:SetFullWidth(true)
+        scroll:AddChild(noResults)
+    end
+
+    -- Deferred layout recalculation to fix scroll content height
+    C_Timer.After(0, function()
+        if scroll and scroll.frame then
+            scroll:DoLayout()
+        end
+        -- Refocus search box after search-triggered rebuild
+        if self._searchRefresh and searchBox and searchBox.editbox then
+            self._searchRefresh = false
+            searchBox.editbox:SetFocus()
+            searchBox.editbox:SetCursorPosition(#searchText)
+        end
+    end)
 end
 
 function DungeonQuestTracker:DrawComplex(container, complex)
+    local drewAny = false
     for _, dungeon in ipairs(complex.dungeons) do
         local total, completed, inProgress = self:GetDungeonStats(dungeon)
 
         if total > 0 and not (completed == total and not self.db.profile.showCompletedDungeons) then
-            self:DrawDungeon(container, dungeon, total, completed, inProgress)
+            -- Filter by search text
+            if self:FuzzyMatchDungeon(dungeon, searchText) then
+                self:DrawDungeon(container, dungeon, total, completed, inProgress)
+                drewAny = true
+            end
         end
     end
+    return drewAny
 end
 
 function DungeonQuestTracker:DrawDungeon(container, dungeon, total, completed, inProgress)
+    -- Collect prerequisite quest IDs to avoid drawing them as top-level
+    local prereqIds = {}
+    if self.db.profile.showPrerequisites then
+        for _, quest in ipairs(dungeon.quests) do
+            if self:ShouldShowQuest(quest) and quest.prerequisites then
+                for _, prereq in ipairs(quest.prerequisites) do
+                    prereqIds[prereq.questId] = true
+                end
+            end
+        end
+    end
+
+    -- Check if dungeon name itself matched (show all quests) vs quest-level match
+    local dungeonNameMatches = searchText == "" or
+        (dungeon.name and dungeon.name:lower():find(searchText:lower(), 1, true) ~= nil)
+
+    -- Collect visible quests first to avoid empty groups
+    local visibleQuests = {}
+    for _, quest in ipairs(dungeon.quests) do
+        if self:ShouldShowQuest(quest) and not prereqIds[quest.questId] then
+            if dungeonNameMatches or self:FuzzyMatchQuest(quest, searchText) then
+                table.insert(visibleQuests, quest)
+            end
+        end
+    end
+
+    if #visibleQuests == 0 then return end
+
     -- Header icon based on completion
     local headerIcon
     if completed == total then
@@ -151,31 +253,14 @@ function DungeonQuestTracker:DrawDungeon(container, dungeon, total, completed, i
     group:SetLayout("List")
     container:AddChild(group)
 
-    -- Collect all prerequisite quest IDs to avoid drawing them twice
-    local prereqIds = {}
-    if self.db.profile.showPrerequisites then
-        for _, quest in ipairs(dungeon.quests) do
-            if self:ShouldShowQuest(quest) and quest.prerequisites then
-                for _, prereq in ipairs(quest.prerequisites) do
-                    prereqIds[prereq.questId] = true
-                end
+    for _, quest in ipairs(visibleQuests) do
+        local hasPrereqs = self.db.profile.showPrerequisites and quest.prerequisites and #quest.prerequisites > 0
+        if hasPrereqs then
+            for _, prereq in ipairs(quest.prerequisites) do
+                self:DrawPrereqRow(group, prereq)
             end
         end
-    end
-
-    for _, quest in ipairs(dungeon.quests) do
-        if self:ShouldShowQuest(quest) and not prereqIds[quest.questId] then
-            -- Draw prerequisites first (at normal indent)
-            local hasPrereqs = self.db.profile.showPrerequisites and quest.prerequisites and #quest.prerequisites > 0
-            if hasPrereqs then
-                for _, prereq in ipairs(quest.prerequisites) do
-                    self:DrawPrereqRow(group, prereq)
-                end
-            end
-
-            -- Draw main quest (indented if it has prerequisites)
-            self:DrawQuestRow(group, quest, hasPrereqs)
-        end
+        self:DrawQuestRow(group, quest, hasPrereqs)
     end
 end
 
@@ -321,89 +406,4 @@ function DungeonQuestTracker:ShowWowheadLink(questId, questName)
     self.linkFrame.editBox:HighlightText()
     self.linkFrame:Show()
     self.linkFrame.editBox:SetFocus()
-end
-
--- Summary Tab
-function DungeonQuestTracker:DrawSummaryTab(container)
-    local totalQuests, totalCompleted, totalInProgress = self:GetOverallStats()
-    local pct = totalQuests > 0 and math.floor((totalCompleted / totalQuests) * 100) or 0
-
-    local overviewGroup = AceGUI:Create("InlineGroup")
-    overviewGroup:SetTitle("Overall Progress")
-    overviewGroup:SetFullWidth(true)
-    overviewGroup:SetLayout("List")
-    container:AddChild(overviewGroup)
-
-    local pctColor = pct == 100 and "00cc00" or (pct >= 50 and "ffcc00" or "ff6644")
-    local overallLabel = AceGUI:Create("Label")
-    overallLabel:SetText(string.format(
-        "  |cffffd700Quests Completed:|r  |cff00cc00%d|r |cff999999/|r %d  |cff%s(%d%%)|r",
-        totalCompleted, totalQuests, pctColor, pct
-    ))
-    overallLabel:SetFullWidth(true)
-    overallLabel:SetFontObject(GameFontNormal)
-    overviewGroup:AddChild(overallLabel)
-
-    if totalInProgress > 0 then
-        local progressLabel = AceGUI:Create("Label")
-        progressLabel:SetText(string.format("  |cffffd700In Progress:|r  |cffffff00%d|r quests", totalInProgress))
-        progressLabel:SetFullWidth(true)
-        overviewGroup:AddChild(progressLabel)
-    end
-
-    -- Spacer
-    local spacer = AceGUI:Create("Label")
-    spacer:SetText(" ")
-    spacer:SetFullWidth(true)
-    container:AddChild(spacer)
-
-    -- Per-complex breakdown
-    for _, complex in ipairs(self.DUNGEON_DATA) do
-        local hasVisibleDungeons = false
-        local complexTotal, complexCompleted = 0, 0
-        for _, dungeon in ipairs(complex.dungeons) do
-            local t, c = self:GetDungeonStats(dungeon)
-            if t > 0 then
-                hasVisibleDungeons = true
-                complexTotal = complexTotal + t
-                complexCompleted = complexCompleted + c
-            end
-        end
-
-        if hasVisibleDungeons then
-            local complexColor = complexCompleted == complexTotal and "00cc00" or (complexCompleted > 0 and "ffcc00" or "ff4444")
-
-            local complexGroup = AceGUI:Create("InlineGroup")
-            complexGroup:SetTitle(string.format("%s  |cff%s%d/%d|r",
-                complex.complex, complexColor, complexCompleted, complexTotal))
-            complexGroup:SetFullWidth(true)
-            complexGroup:SetLayout("List")
-            container:AddChild(complexGroup)
-
-            for _, dungeon in ipairs(complex.dungeons) do
-                local t, c = self:GetDungeonStats(dungeon)
-                if t > 0 then
-                    local color
-                    if c == t then
-                        color = "00cc00"
-                    elseif c > 0 then
-                        color = "ffcc00"
-                    else
-                        color = "ff4444"
-                    end
-
-                    local statusIcon = c == t and STATUS_ICONS.completed or
-                        (c > 0 and STATUS_ICONS.in_progress or STATUS_ICONS.not_started)
-
-                    local dungeonLabel = AceGUI:Create("Label")
-                    dungeonLabel:SetText(string.format(
-                        "  %s  |cff%s%s|r  |cff%s%d/%d|r",
-                        statusIcon, color, dungeon.name, color, c, t
-                    ))
-                    dungeonLabel:SetFullWidth(true)
-                    complexGroup:AddChild(dungeonLabel)
-                end
-            end
-        end
-    end
 end

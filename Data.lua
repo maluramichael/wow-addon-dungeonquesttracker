@@ -2116,13 +2116,8 @@ DungeonQuestTracker.DUNGEON_DATA = {
 -- Tab definitions: which complexes go in which tab
 DungeonQuestTracker.TAB_DEFINITIONS = {
     {
-        value = "summary",
-        text = "Summary",
-        complexes = {},
-    },
-    {
-        value = "dungeons",
-        text = "Dungeons",
+        value = "classic",
+        text = "Classic",
         complexes = {
             "Ragefire Chasm",
             "Wailing Caverns",
@@ -2142,6 +2137,12 @@ DungeonQuestTracker.TAB_DEFINITIONS = {
             "Dire Maul",
             "Stratholme",
             "Scholomance",
+        },
+    },
+    {
+        value = "tbc",
+        text = "TBC",
+        complexes = {
             "Hellfire Citadel",
             "Coilfang Reservoir",
             "Auchindoun",

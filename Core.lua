@@ -29,7 +29,8 @@ function DungeonQuestTracker:GetDefaults()
             showPrerequisites = true,
             showOnlyCurrentFaction = true,
             showHeroicQuests = true,
-            lastTab = "summary",
+            lastTab = "classic",
+            searchText = "",
         },
     }
 end
@@ -163,6 +164,34 @@ end
 
 function DungeonQuestTracker:GetPlayerFaction()
     return playerFaction
+end
+
+-- Simple case-insensitive substring search
+local function SubstringMatch(haystack, needle)
+    if not needle or needle == "" then return true end
+    if not haystack or haystack == "" then return false end
+    return haystack:lower():find(needle:lower(), 1, true) ~= nil
+end
+
+function DungeonQuestTracker:FuzzyMatchQuest(quest, searchText)
+    if not searchText or searchText == "" then return true end
+    if SubstringMatch(quest.name, searchText) then return true end
+    if quest.heroic and SubstringMatch("heroic", searchText) then return true end
+    return false
+end
+
+function DungeonQuestTracker:FuzzyMatchDungeon(dungeon, searchText)
+    if not searchText or searchText == "" then return true end
+
+    if SubstringMatch(dungeon.name, searchText) then return true end
+
+    for _, quest in ipairs(dungeon.quests) do
+        if self:ShouldShowQuest(quest) then
+            if SubstringMatch(quest.name, searchText) then return true end
+        end
+    end
+
+    return false
 end
 
 function DungeonQuestTracker:GetOverallStats()
