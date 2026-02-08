@@ -292,9 +292,17 @@ function DungeonQuestTracker:DrawQuestRow(container, quest, indented)
         nameColor = "eeeeee"
     end
 
+    -- Level tag: show in red/green if quest has a level and is not completed
+    local levelTag = ""
+    if quest.level and status ~= "completed" then
+        local playerLevel = UnitLevel("player")
+        local levelColor = playerLevel >= quest.level and "00cc00" or "ff4444"
+        levelTag = string.format(" |cff%s(%d)|r", levelColor, quest.level)
+    end
+
     local indent = indented and "        " or "  "
-    local text = string.format("%s%s  |cff%s%s|r%s%s",
-        indent, icon, nameColor, quest.name, heroicTag, factionTag)
+    local text = string.format("%s%s  |cff%s%s|r%s%s%s",
+        indent, icon, nameColor, quest.name, levelTag, heroicTag, factionTag)
 
     local row = AceGUI:Create("InteractiveLabel")
     row:SetText(text)

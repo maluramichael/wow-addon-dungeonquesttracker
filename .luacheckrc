@@ -50,7 +50,7 @@ read_globals = {
     "ChatFontNormal",
 
     -- Unit API
-    "UnitName", "UnitGUID", "UnitFactionGroup",
+    "UnitName", "UnitGUID", "UnitFactionGroup", "UnitLevel",
 
     -- Quest API
     "C_QuestLog", "GetQuestLogTitle", "GetNumQuestLogEntries",

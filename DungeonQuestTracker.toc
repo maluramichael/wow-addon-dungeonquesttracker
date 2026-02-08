@@ -2,7 +2,7 @@
 ## Title: |cFF00D1FFMM|r DungeonQuestTracker
 ## Notes: Track dungeon quest completion across all Classic and TBC dungeons
 ## Author: Michael Malura
-## Version: 0.2.0
+## Version: 0.3.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_11
 ## Category-enUS: Quests
 ## Category-deDE: Quests
