@@ -31,6 +31,8 @@ function DungeonQuestTracker:GetDefaults()
             showHeroicQuests = true,
             lastTab = "classic",
             searchText = "",
+            debugQuestStatus = nil,
+            debugHighlightDungeon = "",
         },
     }
 end
@@ -45,6 +47,9 @@ function DungeonQuestTracker:OnInitialize()
     -- Register options
     LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName, self:GetOptionsTable())
     LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, "DungeonQuestTracker")
+
+    -- Register debug options (opened via /dqt debug as standalone window)
+    LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName .. "_Debug", self:GetDebugOptionsTable())
 
     -- Setup minimap button
     self:SetupMinimapButton()
@@ -72,12 +77,15 @@ function DungeonQuestTracker:SlashCommand(input)
         self:ToggleUI()
     elseif cmd == "config" or cmd == "options" then
         OpenOptions()
+    elseif cmd == "debug" then
+        LibStub("AceConfigDialog-3.0"):Open(addonName .. "_Debug")
     elseif cmd == "summary" then
         self:PrintSummary()
     else
         self:Print("DungeonQuestTracker commands:")
         self:Print("  /dqt - Toggle quest tracker window")
         self:Print("  /dqt config - Open options")
+        self:Print("  /dqt debug - Open debug options")
         self:Print("  /dqt summary - Print completion summary to chat")
     end
 end
@@ -105,6 +113,12 @@ local function IsQuestInLog(questId)
 end
 
 function DungeonQuestTracker:GetQuestStatus(questId)
+    -- Debug override: force all quests to a specific status
+    local debugStatus = self.db.profile.debugQuestStatus
+    if debugStatus then
+        return debugStatus
+    end
+
     if not cacheDirty and questStatusCache[questId] then
         return questStatusCache[questId]
     end

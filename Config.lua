@@ -53,6 +53,7 @@ function DungeonQuestTracker:GetOptionsTable()
                         end,
                         set = function(_, value)
                             self.db.profile.showCompletedDungeons = value
+                            self:RefreshUI()
                         end,
                     },
                     showPrerequisites = {
@@ -66,6 +67,7 @@ function DungeonQuestTracker:GetOptionsTable()
                         end,
                         set = function(_, value)
                             self.db.profile.showPrerequisites = value
+                            self:RefreshUI()
                         end,
                     },
                     showOnlyCurrentFaction = {
@@ -79,6 +81,7 @@ function DungeonQuestTracker:GetOptionsTable()
                         end,
                         set = function(_, value)
                             self.db.profile.showOnlyCurrentFaction = value
+                            self:RefreshUI()
                         end,
                     },
                     showHeroicQuests = {
@@ -92,6 +95,7 @@ function DungeonQuestTracker:GetOptionsTable()
                         end,
                         set = function(_, value)
                             self.db.profile.showHeroicQuests = value
+                            self:RefreshUI()
                         end,
                     },
                 },
@@ -112,6 +116,53 @@ function DungeonQuestTracker:GetOptionsTable()
                         order = 1,
                     },
                 },
+            },
+        },
+    }
+end
+
+function DungeonQuestTracker:GetDebugOptionsTable()
+    return {
+        type = "group",
+        name = "Debug",
+        args = {
+            questStatus = {
+                type = "select",
+                name = "Quest Status Override",
+                desc = "Override all quest statuses for testing",
+                order = 1,
+                width = "full",
+                values = {
+                    ["original"] = "Original (real data)",
+                    ["completed"] = "Everything Done",
+                    ["not_started"] = "Nothing Done",
+                },
+                get = function()
+                    return self.db.profile.debugQuestStatus or "original"
+                end,
+                set = function(_, value)
+                    if value == "original" then
+                        self.db.profile.debugQuestStatus = nil
+                    else
+                        self.db.profile.debugQuestStatus = value
+                    end
+                    self:InvalidateCache()
+                    self:RefreshUI()
+                end,
+            },
+            highlightDungeon = {
+                type = "input",
+                name = "Highlight Dungeon",
+                desc = "Force-highlight a dungeon as if you are inside it (e.g. 'Mana-Tombs'). Leave empty to disable.",
+                order = 2,
+                width = "full",
+                get = function()
+                    return self.db.profile.debugHighlightDungeon or ""
+                end,
+                set = function(_, value)
+                    self.db.profile.debugHighlightDungeon = value
+                    self:RefreshUI()
+                end,
             },
         },
     }

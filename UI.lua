@@ -42,6 +42,10 @@ function DungeonQuestTracker:ShowUI()
         widget:Hide()
     end)
 
+    -- Register for ESC-to-close
+    _G["DQTMainFrame"] = mainFrame.frame
+    tinsert(UISpecialFrames, "DQTMainFrame")
+
     -- Build tab list from TAB_DEFINITIONS
     local tabs = {}
     for _, tabDef in ipairs(self.TAB_DEFINITIONS) do
@@ -125,6 +129,10 @@ function DungeonQuestTracker:RefreshTabContent(container, tab)
         self._searchRefresh = true
         self:RefreshUI()
     end)
+    -- ESC in search box should close the whole frame
+    searchWidget.editbox:HookScript("OnEscapePressed", function()
+        mainFrame:Hide()
+    end)
     scroll:AddChild(searchWidget)
 
     searchBox = searchWidget
@@ -140,15 +148,48 @@ function DungeonQuestTracker:RefreshTabContent(container, tab)
 
     if not tabDef then return end
 
-    -- Draw dungeons for each complex in this tab
-    local hasResults = false
+    -- Detect current instance for highlighting (or debug override)
+    local currentInstanceName = nil
+    if self.db.profile.debugHighlightDungeon and self.db.profile.debugHighlightDungeon ~= "" then
+        currentInstanceName = self.db.profile.debugHighlightDungeon
+    else
+        local inInstance, instanceType = IsInInstance()
+        if inInstance and (instanceType == "party" or instanceType == "raid") then
+            currentInstanceName = GetInstanceInfo()
+        end
+    end
+
+    -- Collect complexes for this tab, sorting current instance to top
+    local orderedComplexes = {}
+    local currentInstanceComplex = nil
     for _, complexName in ipairs(tabDef.complexes) do
         for _, complex in ipairs(self.DUNGEON_DATA) do
             if complex.complex == complexName then
-                local drew = self:DrawComplex(scroll, complex)
-                if drew then hasResults = true end
+                local isCurrentComplex = false
+                if currentInstanceName then
+                    for _, dungeon in ipairs(complex.dungeons) do
+                        if dungeon.name and dungeon.name:find(currentInstanceName, 1, true) then
+                            isCurrentComplex = true
+                        end
+                    end
+                end
+                if isCurrentComplex then
+                    currentInstanceComplex = complex
+                else
+                    table.insert(orderedComplexes, complex)
+                end
             end
         end
+    end
+    if currentInstanceComplex then
+        table.insert(orderedComplexes, 1, currentInstanceComplex)
+    end
+
+    -- Draw dungeons
+    local hasResults = false
+    for _, complex in ipairs(orderedComplexes) do
+        local drew = self:DrawComplex(scroll, complex, currentInstanceName)
+        if drew then hasResults = true end
     end
 
     -- No results message when searching
@@ -173,15 +214,16 @@ function DungeonQuestTracker:RefreshTabContent(container, tab)
     end)
 end
 
-function DungeonQuestTracker:DrawComplex(container, complex)
+function DungeonQuestTracker:DrawComplex(container, complex, currentInstanceName)
     local drewAny = false
     for _, dungeon in ipairs(complex.dungeons) do
         local total, completed, inProgress = self:GetDungeonStats(dungeon)
 
         if total > 0 and not (completed == total and not self.db.profile.showCompletedDungeons) then
-            -- Filter by search text
             if self:FuzzyMatchDungeon(dungeon, searchText) then
-                self:DrawDungeon(container, dungeon, total, completed, inProgress)
+                local isCurrentInstance = currentInstanceName and
+                    dungeon.name and dungeon.name:find(currentInstanceName, 1, true) ~= nil
+                self:DrawDungeon(container, dungeon, total, completed, inProgress, isCurrentInstance)
                 drewAny = true
             end
         end
@@ -189,7 +231,7 @@ function DungeonQuestTracker:DrawComplex(container, complex)
     return drewAny
 end
 
-function DungeonQuestTracker:DrawDungeon(container, dungeon, total, completed, inProgress)
+function DungeonQuestTracker:DrawDungeon(container, dungeon, total, completed, inProgress, isCurrentInstance)
     -- Collect prerequisite quest IDs to avoid drawing them as top-level
     local prereqIds = {}
     if self.db.profile.showPrerequisites then
@@ -211,7 +253,10 @@ function DungeonQuestTracker:DrawDungeon(container, dungeon, total, completed, i
     for _, quest in ipairs(dungeon.quests) do
         if self:ShouldShowQuest(quest) and not prereqIds[quest.questId] then
             if dungeonNameMatches or self:FuzzyMatchQuest(quest, searchText) then
-                table.insert(visibleQuests, quest)
+                -- Hide completed quests when Show Completed is off
+                if self.db.profile.showCompletedDungeons or self:GetQuestStatus(quest.questId) ~= "completed" then
+                    table.insert(visibleQuests, quest)
+                end
             end
         end
     end
@@ -253,13 +298,24 @@ function DungeonQuestTracker:DrawDungeon(container, dungeon, total, completed, i
     group:SetLayout("List")
     container:AddChild(group)
 
+    -- Highlight current instance dungeon
+    if isCurrentInstance and group.content then
+        local bg = group.content:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.2, 0.6, 1.0, 0.08)
+    end
+
     for _, quest in ipairs(visibleQuests) do
         local hasPrereqs = self.db.profile.showPrerequisites and quest.prerequisites and #quest.prerequisites > 0
         if hasPrereqs then
-            for i, prereq in ipairs(quest.prerequisites) do
-                self:DrawPrereqRow(group, prereq, i - 1)
+            local drawnPrereqs = 0
+            for _, prereq in ipairs(quest.prerequisites) do
+                if self.db.profile.showCompletedDungeons or self:GetQuestStatus(prereq.questId) ~= "completed" then
+                    self:DrawPrereqRow(group, prereq, drawnPrereqs)
+                    drawnPrereqs = drawnPrereqs + 1
+                end
             end
-            self:DrawQuestRow(group, quest, #quest.prerequisites)
+            self:DrawQuestRow(group, quest, drawnPrereqs)
         else
             self:DrawQuestRow(group, quest, 0)
         end

@@ -45,7 +45,7 @@ read_globals = {
     "LibStub",
 
     -- Frame API
-    "CreateFrame", "UIParent", "GameTooltip", "GameFontNormal",
+    "CreateFrame", "UIParent", "UISpecialFrames", "GameTooltip", "GameFontNormal",
     "GameFontNormalSmall", "GameFontHighlight", "GameFontHighlightSmall",
     "ChatFontNormal",
 
@@ -54,6 +54,9 @@ read_globals = {
 
     -- Quest API
     "C_QuestLog", "GetQuestLogTitle", "GetNumQuestLogEntries",
+
+    -- Instance API
+    "IsInInstance", "GetInstanceInfo",
 
     -- Misc API
     "GetTime", "GetRealmName", "GetAddOnMetadata",
