@@ -23,11 +23,34 @@ function DungeonQuestTracker:ToggleUI()
     end
 end
 
+function DungeonQuestTracker:AutoSwitchTab()
+    if not self.tabGroup then return false end
+    local instanceName = self:GetCurrentInstanceName()
+    if not instanceName then return false end
+    local targetTab = self:FindTabForInstance(instanceName)
+    if targetTab and targetTab ~= currentTab then
+        currentTab = targetTab
+        self.db.profile.lastTab = targetTab
+        self.tabGroup:SelectTab(targetTab)
+        return true
+    end
+    return false
+end
+
+function DungeonQuestTracker:OnZoneChangedUI()
+    if not mainFrame or not mainFrame:IsShown() then return end
+    if not self:AutoSwitchTab() then
+        self:RefreshUI()
+    end
+end
+
 function DungeonQuestTracker:ShowUI()
     if mainFrame then
         self:InvalidateCache()
         self:UpdateStatusBar()
-        self:RefreshUI()
+        if not self:AutoSwitchTab() then
+            self:RefreshUI()
+        end
         mainFrame:Show()
         return
     end
@@ -68,6 +91,14 @@ function DungeonQuestTracker:ShowUI()
     -- Migrate old "summary" or "dungeons" tab values
     if lastTab == "summary" or lastTab == "dungeons" then
         lastTab = "classic"
+    end
+    -- Auto-switch to tab containing current instance
+    local instanceName = self:GetCurrentInstanceName()
+    if instanceName then
+        local targetTab = self:FindTabForInstance(instanceName)
+        if targetTab then
+            lastTab = targetTab
+        end
     end
     currentTab = lastTab
     tabGroup:SelectTab(lastTab)
@@ -148,16 +179,8 @@ function DungeonQuestTracker:RefreshTabContent(container, tab)
 
     if not tabDef then return end
 
-    -- Detect current instance for highlighting (or debug override)
-    local currentInstanceName = nil
-    if self.db.profile.debugHighlightDungeon and self.db.profile.debugHighlightDungeon ~= "" then
-        currentInstanceName = self.db.profile.debugHighlightDungeon
-    else
-        local inInstance, instanceType = IsInInstance()
-        if inInstance and (instanceType == "party" or instanceType == "raid") then
-            currentInstanceName = GetInstanceInfo()
-        end
-    end
+    -- Detect current instance for highlighting and sorting
+    local currentInstanceName = self:GetCurrentInstanceName()
 
     -- Collect complexes for this tab, sorting current instance to top
     local orderedComplexes = {}
@@ -168,7 +191,7 @@ function DungeonQuestTracker:RefreshTabContent(container, tab)
                 local isCurrentComplex = false
                 if currentInstanceName then
                     for _, dungeon in ipairs(complex.dungeons) do
-                        if dungeon.name and dungeon.name:find(currentInstanceName, 1, true) then
+                        if self:MatchesDungeon(dungeon.name, currentInstanceName) then
                             isCurrentComplex = true
                         end
                     end
@@ -215,14 +238,28 @@ function DungeonQuestTracker:RefreshTabContent(container, tab)
 end
 
 function DungeonQuestTracker:DrawComplex(container, complex, currentInstanceName)
-    local drewAny = false
+    -- Sort current instance dungeon to top within the complex
+    local orderedDungeons = {}
+    local currentDungeon = nil
     for _, dungeon in ipairs(complex.dungeons) do
+        if currentInstanceName and self:MatchesDungeon(dungeon.name, currentInstanceName) then
+            currentDungeon = dungeon
+        else
+            table.insert(orderedDungeons, dungeon)
+        end
+    end
+    if currentDungeon then
+        table.insert(orderedDungeons, 1, currentDungeon)
+    end
+
+    local drewAny = false
+    for _, dungeon in ipairs(orderedDungeons) do
         local total, completed, inProgress = self:GetDungeonStats(dungeon)
 
         if total > 0 and not (completed == total and not self.db.profile.showCompletedDungeons) then
             if self:FuzzyMatchDungeon(dungeon, searchText) then
                 local isCurrentInstance = currentInstanceName and
-                    dungeon.name and dungeon.name:find(currentInstanceName, 1, true) ~= nil
+                    self:MatchesDungeon(dungeon.name, currentInstanceName)
                 self:DrawDungeon(container, dungeon, total, completed, inProgress, isCurrentInstance)
                 drewAny = true
             end

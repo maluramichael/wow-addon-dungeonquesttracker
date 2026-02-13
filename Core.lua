@@ -62,8 +62,14 @@ function DungeonQuestTracker:OnEnable()
     self:RegisterEvent("QUEST_TURNED_IN", "InvalidateCache")
     self:RegisterEvent("QUEST_LOG_UPDATE", "InvalidateCache")
     self:RegisterEvent("QUEST_ACCEPTED", "InvalidateCache")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChanged")
 
-    self:Print("DungeonQuestTracker loaded. Use /dqt to open.")
+    local instanceName = self:GetCurrentInstanceName()
+    if instanceName then
+        self:Print("Loaded. Current instance: " .. instanceName)
+    else
+        self:Print("Loaded. Not in an instance. Use /dqt to open.")
+    end
 end
 
 function DungeonQuestTracker:OnDisable()
@@ -178,6 +184,45 @@ end
 
 function DungeonQuestTracker:GetPlayerFaction()
     return playerFaction
+end
+
+function DungeonQuestTracker:GetCurrentInstanceName()
+    if self.db.profile.debugHighlightDungeon and self.db.profile.debugHighlightDungeon ~= "" then
+        return self.db.profile.debugHighlightDungeon
+    end
+    local inInstance, instanceType = IsInInstance()
+    if inInstance and (instanceType == "party" or instanceType == "raid") then
+        return GetInstanceInfo()
+    end
+    return nil
+end
+
+function DungeonQuestTracker:MatchesDungeon(dungeonName, instanceName)
+    if not dungeonName or not instanceName then return false end
+    return dungeonName:find(instanceName, 1, true) ~= nil
+        or instanceName:find(dungeonName, 1, true) ~= nil
+end
+
+function DungeonQuestTracker:FindTabForInstance(instanceName)
+    if not instanceName then return nil end
+    for _, tabDef in ipairs(self.TAB_DEFINITIONS) do
+        for _, complexName in ipairs(tabDef.complexes) do
+            for _, complex in ipairs(self.DUNGEON_DATA) do
+                if complex.complex == complexName then
+                    for _, dungeon in ipairs(complex.dungeons) do
+                        if self:MatchesDungeon(dungeon.name, instanceName) then
+                            return tabDef.value
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function DungeonQuestTracker:OnZoneChanged()
+    self:OnZoneChangedUI()
 end
 
 -- Simple case-insensitive substring search
