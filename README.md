@@ -1,5 +1,10 @@
 # DungeonQuestTracker
 
+<!-- links:start -->
+[![Support me on Ko-fi](https://malura.de/assets/badge/kofi.svg)](https://malura.de/go/kofi?ref=wow-addon-dungeonquesttracker)
+[![Check out my page](https://malura.de/assets/badge/malura.svg)](https://malura.de/go/site?ref=wow-addon-dungeonquesttracker)
+<!-- links:end -->
+
 Never miss a dungeon quest again. DungeonQuestTracker shows you every quest available in every Classic and TBC dungeon, tracks your completion progress, and highlights prerequisite chains so you know exactly what to pick up before zoning in.
 
 ## Features
