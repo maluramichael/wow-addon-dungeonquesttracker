@@ -107,7 +107,11 @@ function DungeonQuestTracker:InvalidateCache()
 end
 
 -- TBC Classic compatible: scan quest log for a quest ID
+-- The modern engine (WoW Forever) only has C_QuestLog.
 local function IsQuestInLog(questId)
+    if not GetQuestLogTitle then
+        return C_QuestLog.GetLogIndexForQuestID(questId) ~= nil
+    end
     local numEntries = GetNumQuestLogEntries()
     for i = 1, numEntries do
         local _, _, _, isHeader, _, _, _, qid = GetQuestLogTitle(i)

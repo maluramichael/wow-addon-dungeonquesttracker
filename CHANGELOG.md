@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0] - 2026-11-06
+
+### Added
+- WoW Forever support (interface 16001)
+- Quest log check uses C_QuestLog on WoW Forever
+
 ## v0.1.0
 
 - Initial release

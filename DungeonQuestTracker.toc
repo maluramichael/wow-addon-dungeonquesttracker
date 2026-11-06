@@ -1,8 +1,8 @@
-## Interface: 20505
+## Interface: 20505, 16001
 ## Title: |cFF00D1FFMM|r DungeonQuestTracker
 ## Notes: Track dungeon quest completion across all Classic and TBC dungeons
 ## Author: Michael Malura
-## Version: 0.4.1
+## Version: 0.5.0
 ## IconTexture: Interface\Icons\INV_Misc_Book_11
 ## Category-enUS: Quests
 ## Category-deDE: Quests
